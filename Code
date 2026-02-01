@@ -1,0 +1,96 @@
+import asyncio
+import random
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import Command
+from aiogram.utils.keyboard import ReplyKeyboardBuilder
+
+TOKEN = "ВАШ_ТОКЕН_ОТ_BOTFATHER"
+
+bot = Bot(token=TOKEN)
+dp = Dispatcher()
+
+# Временная база данных в памяти
+users_db = {}
+
+def get_user_data(user_id):
+    if user_id not in users_db:
+        users_db[user_id] = {"balance": 10}
+    return users_db[user_id]
+
+def main_kb():
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="🎰 Слоты")
+    builder.button(text="🎲 Кубик")
+    builder.button(text="💰 Баланс")
+    builder.button(text="💳 Вывод")
+    builder.adjust(2)
+    return builder.as_markup(resize_keyboard=True)
+
+@dp.message(Command("start"))
+async def start(message: types.Message):
+    user = get_user_data(message.from_user.id)
+    await message.answer(
+        f"Добро пожаловать в «Казик от Тапка»! 🎰\n"
+        f"Тебе начислено приветственные {user['balance']}₽.\n"
+        "Удачи! Помни: вывод только от 100 000₽.",
+        reply_markup=main_kb()
+    )
+
+@dp.message(F.text == "💰 Баланс")
+async def show_balance(message: types.Message):
+    user = get_user_data(message.from_user.id)
+    await message.answer(f"Твой текущий баланс: {user['balance']}₽")
+
+@dp.message(F.text == "🎰 Слоты")
+async def play_slots(message: types.Message):
+    user = get_user_data(message.from_user.id)
+    bet = 5
+    if user['balance'] < bet:
+        return await message.answer("Недостаточно денег! Ставка: 5₽")
+    
+    user['balance'] -= bet
+    msg = await message.answer_dice(emoji="🎰")
+    
+    # Значения выигрыша в слотах: 1, 22, 43, 64 (джекпоты в Telegram)
+    if msg.dice.value in [1, 22, 43, 64]:
+        win = 50
+        user['balance'] += win
+        await asyncio.sleep(4)
+        await message.answer(f"🔥 ДЖЕКПОТ! Ты выиграл {win}₽!")
+    else:
+        await asyncio.sleep(4)
+        await message.answer("Мимо... Попробуй еще раз!")
+
+@dp.message(F.text == "🎲 Кубик")
+async def play_dice(message: types.Message):
+    user = get_user_data(message.from_user.id)
+    bet = 2
+    if user['balance'] < bet:
+        return await message.answer("Недостаточно денег! Ставка: 2₽")
+    
+    user['balance'] -= bet
+    msg = await message.answer_dice(emoji="🎲")
+    
+    if msg.dice.value >= 4:
+        win = 4
+        user['balance'] += win
+        await asyncio.sleep(4)
+        await message.answer(f"Победа! Ты выиграл {win}₽")
+    else:
+        await asyncio.sleep(4)
+        await message.answer("Проигрыш. Выпало меньше 4.")
+
+@dp.message(F.text == "💳 Вывод")
+async def withdraw(message: types.Message):
+    user = get_user_data(message.from_user.id)
+    min_sum = 100000
+    if user['balance'] >= min_sum:
+        await message.answer("Введите номер карты для вывода:")
+    else:
+        await message.answer(f"Недостаточно средств!\nМинималка: {min_sum}₽\nТвой баланс: {user['balance']}₽")
+
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
